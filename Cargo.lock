@@ -237,6 +237,7 @@ dependencies = [
  "ahash",
  "anyhow",
  "criterion",
+ "memchr",
  "memmap2",
 ]
 

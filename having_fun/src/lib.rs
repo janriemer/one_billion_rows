@@ -4,6 +4,7 @@ use std::{
 };
 //use std::time::Instant;
 use ahash::AHashMap;
+use memchr::memchr2_iter;
 use memmap2::MmapOptions;
 
 pub const FILE: &str = "/home/jan/Dev-Projects/repos/contributions/one_billion_rows/create_measurements/measurements.txt";
@@ -74,41 +75,43 @@ fn parse_ascii_digits(buffer: &[u8]) -> i32 {
 }
 
 fn scan_ascii_chunk(start: usize, end: usize, buffer: &[u8]) -> Vec<Aggregator> {
-    let mut counter = AHashMap::with_capacity(NUM_STATIONS);
-
     let mut pos = start;
     let mut line_start = start;
     let mut name_end = start;
     let mut val_start = start;
-    while pos < end {
-        match buffer[pos] {
-            SEMICOLON => {
-                // From line_start to here-1 is the name
-                name_end = pos;
-                val_start = pos + 1;
-            }
-            NEWLINE => {
-                // This is the end of the line
-                let station = &buffer[line_start..name_end];
-                let value_ascii = &buffer[val_start..pos];
-                let value = parse_ascii_digits(value_ascii);
-                let entry = counter.entry(station).or_insert(Aggregator::default());
-                if entry.name.is_empty() {
-                    entry.name = String::from_utf8_lossy(station).to_string();
+    let iter = memchr2_iter(SEMICOLON, NEWLINE, &buffer[start..end]);
+    let counter = iter.fold(
+        AHashMap::with_capacity(NUM_STATIONS),
+        |mut acc, found_idx| {
+            match buffer[start + found_idx] {
+                SEMICOLON => {
+                    // From line_start to here-1 is the name
+                    name_end = start + found_idx;
+                    val_start = start + found_idx + 1;
                 }
-                entry.max = i32::max(value, entry.max);
-                entry.min = i32::min(value, entry.min);
-                entry.sum += value as i64;
-                entry.count += 1;
+                NEWLINE => {
+                    // This is the end of the line
+                    let station = &buffer[line_start..name_end];
+                    let value_ascii = &buffer[val_start..start + found_idx];
+                    let value = parse_ascii_digits(value_ascii);
+                    let entry = acc.entry(station).or_insert(Aggregator::default());
+                    if entry.name.is_empty() {
+                        entry.name = String::from_utf8_lossy(station).to_string();
+                    }
+                    entry.max = i32::max(value, entry.max);
+                    entry.min = i32::min(value, entry.min);
+                    entry.sum += value as i64;
+                    entry.count += 1;
 
-                // Therefore the next line starts at the next character
-                line_start = pos + 1;
+                    // Therefore the next line starts at the next character
+                    line_start = start + found_idx + 1;
+                }
+                _ => {}
             }
-            _ => {}
-        }
+            acc
+        },
+    );
 
-        pos += 1;
-    }
     counter.into_iter().map(|(_k, v)| v).collect()
 }
 
