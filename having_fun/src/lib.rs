@@ -3,7 +3,7 @@ use std::fs::File;
 use ahash::AHashMap;
 use memmap2::MmapOptions;
 
-pub const FILE: &str = "/home/herbert/Rust/one_billion_rows/create_measurements/measurements.txt";
+pub const FILE: &str = "/home/jan/Dev-Projects/repos/contributions/one_billion_rows/create_measurements/measurements.txt";
 pub const NEWLINE: u8 = 10;
 pub const SEMICOLON: u8 = 59;
 pub const MINUS: u8 = 45;
