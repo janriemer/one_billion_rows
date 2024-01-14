@@ -1,4 +1,7 @@
-use std::fs::File;
+use std::{
+    fs::File,
+    io::{self, Write},
+};
 //use std::time::Instant;
 use ahash::AHashMap;
 use memmap2::MmapOptions;
@@ -36,7 +39,7 @@ fn find_next_newline(start: usize, buffer: &[u8]) -> usize {
     let mut pos = start;
     while pos < buffer.len() {
         if buffer[pos] == NEWLINE {
-            return pos+1;
+            return pos + 1;
         }
         pos += 1;
     }
@@ -48,7 +51,7 @@ fn parse_ascii_digits(buffer: &[u8]) -> i32 {
     let mut negative_mul = 1;
     let mut accumulator = 0;
     let mut positional_mul = 10_i32.pow(size as u32 - 2);
-    for i in 0 .. size {
+    for i in 0..size {
         match buffer[i] {
             MINUS => {
                 negative_mul = -1;
@@ -57,7 +60,7 @@ fn parse_ascii_digits(buffer: &[u8]) -> i32 {
             PERIOD => {
                 // Do nothing
             }
-            48 ..= 57 => {
+            48..=57 => {
                 // Digits
                 let digit = buffer[i] as i32 - 48;
                 accumulator += digit * positional_mul;
@@ -119,18 +122,16 @@ pub fn read_file() -> anyhow::Result<()> {
     // a starting point and ending point for each chunk. Starting
     // points are adjusted to seek forward to the next newline.
     let chunk_length = size / NUM_CPUS;
-    let mut starting_points: Vec<usize> = (0 .. NUM_CPUS)
-        .map(|n| n * chunk_length)
-        .collect();
+    let mut starting_points: Vec<usize> = (0..NUM_CPUS).map(|n| n * chunk_length).collect();
     for i in 1..NUM_CPUS {
         starting_points[i] = find_next_newline(starting_points[i], &mapped_file);
     }
 
     let mut ending_points = vec![0usize; NUM_CPUS];
-    for i in 0..NUM_CPUS-1 {
-        ending_points[i] = starting_points[i+1];
+    for i in 0..NUM_CPUS - 1 {
+        ending_points[i] = starting_points[i + 1];
     }
-    ending_points[NUM_CPUS-1] = size;
+    ending_points[NUM_CPUS - 1] = size;
 
     // Using a scoped pool to make it easy to share the immutable data from above.
     // Scan each segment to find station names and values.
@@ -141,9 +142,7 @@ pub fn read_file() -> anyhow::Result<()> {
             let start = starting_points[thread];
             let end = ending_points[thread];
             let buffer = &mapped_file;
-            let handle = scope.spawn(move || {
-                scan_ascii_chunk(start, end, &buffer)
-            });
+            let handle = scope.spawn(move || scan_ascii_chunk(start, end, &buffer));
             handles.push(handle);
         }
 
@@ -167,18 +166,33 @@ pub fn read_file() -> anyhow::Result<()> {
         }
     });
 
-    result.sort_unstable_by(|a,b| a.name.cmp(&b.name));
+    result.sort_unstable_by(|a, b| a.name.cmp(&b.name));
     //assert_eq!(result.len(), NUM_STATIONS);
 
-    print!("{{");
-    result.iter().take(result.len()-1).for_each(|v| {
+    let mut stdout = io::stdout().lock();
+
+    stdout.write(b"{{")?;
+    for v in result.iter().take(result.len() - 1) {
         let mean = v.sum as f64 / v.count as f64;
-        print!("{}={:.1}/{:.1}/{mean:.1}, ", v.name, v.min as f32 / 10.0, v.max as f32 / 10.0);
-    });
-    let v = &result[result.len()-1];
+        write!(
+            stdout,
+            "{}={:.1}/{:.1}/{mean:.1}, ",
+            v.name,
+            v.min as f32 / 10.0,
+            v.max as f32 / 10.0
+        )?;
+    }
+    let v = &result[result.len() - 1];
     let mean = v.sum as f64 / v.count as f64;
-    print!("{}={:.1}/{:.1}/{mean:.1}", v.name, v.min as f32 / 10.0, v.max as f32 / 10.0);
-    println!("}}");
+    write!(
+        stdout,
+        "{}={:.1}/{:.1}/{mean:.1}",
+        v.name,
+        v.min as f32 / 10.0,
+        v.max as f32 / 10.0
+    )?;
+    stdout.write(b"}}")?;
+    stdout.flush()?;
 
     //let elapsed = start.elapsed();
     //println!("Completed in {} seconds", elapsed.as_secs_f32());
