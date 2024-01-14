@@ -167,34 +167,7 @@ pub fn read_file() -> anyhow::Result<()> {
     });
 
     result.sort_unstable_by(|a, b| a.name.cmp(&b.name));
-    //assert_eq!(result.len(), NUM_STATIONS);
+    assert_eq!(result.len(), NUM_STATIONS);
 
-    let mut stdout = io::stdout().lock();
-
-    stdout.write(b"{{")?;
-    for v in result.iter().take(result.len() - 1) {
-        let mean = v.sum as f64 / v.count as f64;
-        write!(
-            stdout,
-            "{}={:.1}/{:.1}/{mean:.1}, ",
-            v.name,
-            v.min as f32 / 10.0,
-            v.max as f32 / 10.0
-        )?;
-    }
-    let v = &result[result.len() - 1];
-    let mean = v.sum as f64 / v.count as f64;
-    write!(
-        stdout,
-        "{}={:.1}/{:.1}/{mean:.1}",
-        v.name,
-        v.min as f32 / 10.0,
-        v.max as f32 / 10.0
-    )?;
-    stdout.write(b"}}")?;
-    stdout.flush()?;
-
-    //let elapsed = start.elapsed();
-    //println!("Completed in {} seconds", elapsed.as_secs_f32());
     Ok(())
 }
